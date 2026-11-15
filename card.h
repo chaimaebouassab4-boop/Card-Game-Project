@@ -6,6 +6,7 @@
 #include <QVector2D>
 #include <QPixmap>
 #include <QPropertyAnimation>
+#include <QElapsedTimer>
 
 class Card : public QObject
 {
@@ -52,7 +53,9 @@ public:
     void noDrag();
 
     void toggleTurnCard();
+    void highlightCapture() { captureGlow.start(); }
 private:
+    QElapsedTimer captureGlow;
     QPropertyAnimation *scaleAnimation;
     qreal m_scale{0.4};
     qreal scaleX{1};

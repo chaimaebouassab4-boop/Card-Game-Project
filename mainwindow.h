@@ -12,6 +12,7 @@
 #include "table.h"
 #include "statt.h"
 #include <QImage>
+#include "audio.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -26,6 +27,9 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
     Mouse mouse;
+    Audio *audio;
+    void showCaptureFeedback(int mode, int count);
+    QElapsedTimer resultElapsed;
 
     QList<Card*> cards;
     void reposition();
@@ -75,6 +79,9 @@ public:
     int winner;
 
 private:
+    QElapsedTimer captureElapsed;
+    QString captureMessage;
+    void drawCaptureFeedback();
     Ui::MainWindow *ui;
     QPixmap image;
 

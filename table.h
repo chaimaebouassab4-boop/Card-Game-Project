@@ -21,7 +21,8 @@ public:
     QList<QVector2D> cardsOrigins;
 
     Card *cardToFollow;
-    int playerToCollect;
+    // Updated only by a successful capture, never by a card left on the table.
+    int lastCapturePlayer{-1};
     Card *cardCollector;
     bool onCollecting{false};
     QList<Card*> cardsCollected;

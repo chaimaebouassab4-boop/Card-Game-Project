@@ -29,6 +29,7 @@ void Player::annonceCard(Card *card)
     Table *table = qobject_cast<MainWindow*>(parent)->table;
     card->setToFirstPlace();
     table->collectCard(card, mode);
+    qobject_cast<MainWindow*>(parent)->audio->play(Audio::Place);
     removeCard(card) ;
     togglePlay();
 }

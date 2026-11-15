@@ -3,6 +3,7 @@
 #include "card.h"
 #include <QPainter>
 #include <QBrush>
+#include <QRadialGradient>
 #include <QPixmap>
 #include <QMouseEvent>
 #include <QTimer>
@@ -23,6 +24,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     setFixedSize(866,650);
+    audio = new Audio(this);
 
 
     QString iconRestartSrc = ":/new/prefix1/textures-ch/restart.png";
@@ -76,6 +78,23 @@ MainWindow::MainWindow(QWidget *parent)
 
     new Menu(this);
 
+    auto *soundButton = new QPushButton(this);
+    soundButton->setGeometry(width() - 126, 12, 110, 32);
+    soundButton->setCheckable(true);
+    soundButton->setChecked(!audio->isMuted());
+    soundButton->setText(audio->isMuted() ? tr("Sound: off") : tr("Sound: on"));
+    soundButton->setAccessibleName(tr("Sound effects"));
+    soundButton->setToolTip(tr("Turn sound effects on or off"));
+    soundButton->setCursor(Qt::PointingHandCursor);
+    soundButton->setStyleSheet("QPushButton{background:#27152f;color:#fff1db;border:1px solid #b987a1;"
+                               "border-radius:8px;font:13px 'Segoe UI';}"
+                               "QPushButton:hover{background:#49304d;}"
+                               "QPushButton:focus{border-color:#ffdc82;}");
+    connect(soundButton, &QPushButton::toggled, this, [=](bool enabled) {
+        audio->setMuted(!enabled);
+        soundButton->setText(enabled ? tr("Sound: on") : tr("Sound: off"));
+    });
+    soundButton->raise();
 }
 
 void MainWindow::initCards()
@@ -146,6 +165,8 @@ void MainWindow::initGame(){
 
 void MainWindow::restart()
 {
+    captureElapsed.invalidate();
+    resultElapsed.invalidate();
     // on va supprimer les joueurs et la table
     delete player;
     delete ai;
@@ -161,7 +182,7 @@ void MainWindow::restart()
    //La boucle parcourt la liste des animations,
     //supprime chaque animation non statique de la liste,
     //puis libère la mémoire associée à chaque animation.
-    for (int i = 0; i < animations.size(); i++) {
+    for (int i = animations.size() - 1; i >= 0; --i) {
         Animation *animation = animations[i];
         // Ignorer les animations statiques
         if (animation->isStatic) {
@@ -246,6 +267,7 @@ bool MainWindow::distributionCards(int mode, QList<Card *> &parent_cards, int ca
                 else ai->addCard(card);
                 if (show) card->toggleTurnCard();
                 card->distributed = true;
+                audio->play(Audio::Deal);
                 card->setToFirstPlace();
                 break;
             }
@@ -268,6 +290,7 @@ bool MainWindow::distributionCards(int mode, QList<Card *> &parent_cards, int ca
                 if (isCardValid) {
                     if (show) card->toggleTurnCard();
                     card->distributed = true;
+                    audio->play(Audio::Deal);
                     card->setToFirstPlace();
                     table->addCard(card);
                     break;
@@ -287,7 +310,7 @@ void MainWindow::paintEvent(QPaintEvent *)
 {
    // background(QColor(226, 156, 38));
 
-    background(QColor(199, 21, 133));
+    background(QColor(34, 112, 75));
 
     player->draw();
     table->draw();
@@ -296,18 +319,11 @@ void MainWindow::paintEvent(QPaintEvent *)
     for(Card *card :cards){
         card->draw();
     }
+    drawCaptureFeedback();
     if (stat->isActive) stat->draw();
     QPainter painter(this);
 
-    painter.setRenderHints(
-        QPainter::Antialiasing ,
-        QPainter::SmoothPixmapTransform);
-
-    // Afficher la lumière
-    painter.setOpacity(0.85);
-    painter.drawImage(QRect(0, 0, width(), height()), light);
-    painter.setOpacity(1);
-
+    painter.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
 
    // painter.setRenderHint(QPainter::Antialiasing);
     //L'antialiasing est une technique utilisée pour réduire les effets
@@ -454,22 +470,29 @@ void MainWindow::reposition()
 
     if (!cardCount && !player->cards.size() && !ai->cards.size() && !isGameFinished && !table->onCollecting) {
         isGameFinished = true;
+        canPlay = false;
 
         Animation *wait = new Animation(1000, this);
         connect(wait, &Animation::onFinished, this,[=]() {
-            for (Card *card : table->cards) {
-                card->toggleTurnCard();
+            if (table->lastCapturePlayer != -1) {
+                for (Card *card : table->cards) {
+                    card->toggleTurnCard();
+                }
             }
 
             Animation *finish = new Animation(1000, this);
             connect(finish, &Animation::onFinished,this, [=]() {
-                Player *lastPlayer = table->playerToCollect == PLAYER ? player : ai;
-                for (Card *card : table->cards) {
-                    card->setToFirstPlace();
-                    lastPlayer->cardsCollected.append(card);
-                    lastPlayer->score+=1;
+                // Award leftovers to the last capturer before deciding the winner.
+                if (table->lastCapturePlayer != -1) {
+                    Player *lastPlayer = table->lastCapturePlayer == PLAYER ? player : ai;
+                    lastPlayer->score += table->cards.size();
+                    for (Card *card : table->cards) {
+                        card->setToFirstPlace();
+                        lastPlayer->cardsCollected.append(card);
+                    }
+                    table->cards.clear();
+                    table->initCardOrigins();
                 }
-                table->cards.clear();
 
                 // Verifie le gagnant.
                 //Si le score du joueur est supérieur à celui de l'IA,
@@ -477,6 +500,8 @@ void MainWindow::reposition()
                 //à celui de l'IA, winner est défini sur -1. Sinon, si les scores
                 //sont égaux, winner est défini sur 0.
                 winner = player->score > ai->score ? 1 : player->score < ai->score ? -1 : 0;
+                resultElapsed.start();
+                audio->play(winner == 1 ? Audio::Victory : Audio::Finish);
 
                 //Activer le tableau de statistique
                     stat->isActive = true;
@@ -497,11 +522,48 @@ void MainWindow::reposition()
 void MainWindow::background(QColor color)
 {
     QPainter painter(this);
-    QBrush brush(color, Qt::SolidPattern);
-    painter.fillRect(0, 0, width(), height(), brush);
+    QRadialGradient felt(rect().center(), qMax(width(), height()) * 0.78);
+    felt.setColorAt(0.0, color.lighter(118));
+    felt.setColorAt(0.62, color);
+    felt.setColorAt(1.0, QColor(7, 43, 32));
+    painter.fillRect(rect(), felt);
+
+    // Soft lighting gives the felt a little depth without washing out the cards.
+    painter.setOpacity(0.10);
+    painter.drawImage(rect(), light);
+    painter.setOpacity(1.0);
+
+    // A narrow warm edge suggests a card table frame.
+    painter.setBrush(Qt::NoBrush);
+    painter.setPen(QPen(QColor(113, 77, 48, 190), 10));
+    painter.drawRoundedRect(rect().adjusted(5, 5, -5, -5), 18, 18);
 
 }
 
 
 
 
+
+void MainWindow::showCaptureFeedback(int mode, int count)
+{
+    captureMessage = tr("%1  +%2 cards").arg(mode == PLAYER ? tr("You") : tr("Computer")).arg(count);
+    captureElapsed.start();
+    audio->play(Audio::Capture);
+}
+
+void MainWindow::drawCaptureFeedback()
+{
+    if (!captureElapsed.isValid() || captureElapsed.elapsed() >= 1100)
+        return;
+    const qreal progress = captureElapsed.elapsed() / 1100.0;
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setOpacity(qMin(1.0, (1.0 - progress) * 3));
+    const QRectF bubble(width() * .5 - 130, height() * .5 - 120 - progress * 28, 260, 38);
+    painter.setBrush(QColor(26, 30, 25, 235));
+    painter.setPen(QPen(QColor("#f5ce77"), 1));
+    painter.drawRoundedRect(bubble, 15, 15);
+    painter.setPen(QColor("#fff1ce"));
+    painter.setFont(QFont("Segoe UI", 13, QFont::DemiBold));
+    painter.drawText(bubble, Qt::AlignCenter, captureMessage);
+}

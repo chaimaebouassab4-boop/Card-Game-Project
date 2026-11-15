@@ -11,12 +11,6 @@ class Menu : public QObject
 public:
     Menu(QObject *parent = nullptr);
 
-    QObject *parent;
-
-    int time{0};
-
-signals:
-
 };
 
 #endif // MENU_H

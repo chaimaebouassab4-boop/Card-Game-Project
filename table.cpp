@@ -47,18 +47,24 @@ void Table::onCollectingCards()
     Card *isMatch = isMatchToCards(cardCollector->index, cards);
     //Appelle la fonction isMatchToCards pour vérifier s'il y a
     //une carte dans la liste cards avec l'indice correspondant à cardCollector->index.
-    if (isMatch != nullptr) cardToFollow = isMatch;
+    if (isMatch != nullptr) {
+        cardToFollow = isMatch;
+        isMatch->highlightCapture();
+    }
     //Si une correspondance de carte a été trouvée,
     //la variable cardToFollow est mise à jour avec cette carte.
 
     if (time >= 500.0 || isMatch == nullptr) {
         if (isMatch == nullptr) {
             isMatch = isMatchToCards(cardCollector->index + 1, cards);
-            if (isMatch != nullptr) cardToFollow = isMatch;
+            if (isMatch != nullptr) {
+                cardToFollow = isMatch;
+                isMatch->highlightCapture();
+            }
 
             if (time - 200 >= 200.0 || isMatch == nullptr) {
                 if (isMatch != nullptr) {
-                    if(playerToCollect== MainWindow::PLAYER) main->player->score+=1;
+                    if(lastCapturePlayer== MainWindow::PLAYER) main->player->score+=1;
                     else
                         main->ai->score+=1;
                     //Exécuté si une nouvelle correspondance de carte est trouvée.
@@ -73,7 +79,7 @@ void Table::onCollectingCards()
                     //cardCollector est mis à jour avec la nouvelle correspondance.
                     //Le temps est réinitialisé à zéro.
                 } else {
-                    if(playerToCollect== MainWindow::PLAYER) main->player->score+=2;
+                    if(lastCapturePlayer== MainWindow::PLAYER) main->player->score+=2;
                     else
                         main->ai->score+=2;
                     //si aucune correspondance de carte n'a été trouvée dans la recherche suivante.
@@ -120,8 +126,9 @@ void Table::collectCard(Card *card, int mode) {
         //le même indice n'a été trouvée dans la liste.
 
     } else {
-        playerToCollect = mode;
+        lastCapturePlayer = mode;
         cardCollector = card;
+        card->highlightCapture();
         onCollecting = true;
         main->canPlay = false;
     }
@@ -151,15 +158,16 @@ void Table::reposition()
             //( une animation de mouvement).
         }
             if (isFinishCollecting) {
-            //Si playerToCollect est == MainWindow::PLAYER, alors playerCollector pointe vers
+            //Si lastCapturePlayer est == MainWindow::PLAYER, alors playerCollector pointe vers
             //l'objet player de la classe MainWindow. Sinon, il pointe vers l'objet ai
-                Player *playerCollector = (playerToCollect == MainWindow::PLAYER) ? main->player : main->ai;
+                Player *playerCollector = (lastCapturePlayer == MainWindow::PLAYER) ? main->player : main->ai;
                 for (Card *card : cardsCollected) {
                     card->setToFirstPlace();
                     card->toggleTurnCard();
                     playerCollector->cardsCollected.append(card);
                 }
 
+                main->showCaptureFeedback(lastCapturePlayer, cardsCollected.size());
                 cardsCollected.clear();
                 initCardOrigins();
                 isFinishCollecting = false;

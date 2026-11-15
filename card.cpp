@@ -141,6 +141,15 @@ void Card::draw() {
     if (ondrag) pen.setColor(QColor(0, 191, 255)), pen.setWidth(4);
     painter.setPen(pen);
     painter.drawRect(size.x() * scaleX * -.5, size.y() * -.5, size.x() * scaleX, size.y());
+    if (captureGlow.isValid() && captureGlow.elapsed() < 650) {
+        const qreal strength = 1.0 - captureGlow.elapsed() / 650.0;
+        painter.setBrush(Qt::NoBrush);
+        for (int border = 10; border >= 2; border -= 2) {
+            painter.setPen(QPen(QColor(255, 215, 110, int(100 * strength)), border));
+            painter.drawRoundedRect(QRectF(-size.x() * .5 - 2, -size.y() * .5 - 2,
+                                          size.x() + 4, size.y() + 4), 5, 5);
+        }
+    }
 
     painter. resetTransform();
 

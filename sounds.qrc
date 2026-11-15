@@ -1,0 +1,7 @@
+<RCC><qresource prefix="/sounds">
+<file alias="deal.wav">sounds/deal.wav</file>
+<file alias="place.wav">sounds/place.wav</file>
+<file alias="capture.wav">sounds/capture.wav</file>
+<file alias="victory.wav">sounds/victory.wav</file>
+<file alias="finish.wav">sounds/finish.wav</file>
+</qresource></RCC>
